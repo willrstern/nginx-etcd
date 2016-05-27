@@ -6,14 +6,14 @@
   "author": "",
   "license": "ISC",
   "scripts": {
-    "predeploy": "docker build -t willrstern/docker-cloud-nginx:latest .",
-    "deploy": "docker push willrstern/docker-cloud-nginx:latest",
-    "predeploy:alpha": "docker build -t willrstern/docker-cloud-nginx:alpha .",
-    "deploy:alpha": "docker push willrstern/docker-cloud-nginx:alpha",
+    "predeploy": "docker build -t willrstern/nginx-etcd:latest .",
+    "deploy": "docker push willrstern/nginx-etcd:latest",
+    "predeploy:alpha": "docker build -t willrstern/nginx-etcd:alpha .",
+    "deploy:alpha": "docker push willrstern/nginx-etcd:alpha",
     "mocha": "mocha --compilers js:babel-register",
     "start": "NGINX_NAME=primary NGINX_ETCD_HOST=localhost NGINX_RELOAD=false NGINX_CERTS='./certs' NGINX_CONFIG_FILE='./default.conf' nodemon docker-cloud-watch.js",
-    "pretest": "docker build -t willrstern/docker-cloud-nginx:test -f Dockerfile.test .",
-    "test": "docker run --rm willrstern/docker-cloud-nginx:test"
+    "pretest": "docker-compose up -d",
+    "test": "docker-compose build test && docker-compose run test"
   },
   "dependencies": {
     "axios": "^0.7.0",
@@ -28,7 +28,6 @@
     "ws": "^0.8.1"
   },
   "devDependencies": {
-    "axios": "^0.7.0",
     "mocha": "^2.4.5",
     "nginx-config-parser": "^0.1.1",
     "nodemon": "^1.9.2"
