@@ -1,82 +1,60 @@
-# docker-cloud-nginx-load-balancing
-Dynamic Nginx Load Balancing for Docker Cloud
+# nginx-etcd
+Dynamic Nginx Load Balancing for Docker
 
-- All Docker Cloud services are acessible through Docker Cloud's API, this allows us to use Docker Cloud's API for automated service registration & service discovery.
-- __No linking or port exposing required.__  When services stop, start, or scale in Docker Cloud, `willrstern/docker-cloud-nginx` containers will notice their private IP addresses.
-- This allows `willrstern/docker-cloud-nginx` containers to dynamically load balance all services with `NGINX_LB` ENV variables set.
-- If a config fails, it will use the last-good-config.  See Slack integration.
+* run etcd
+* run one or more copies of this container to act as public entry points/load balancers to your cluster
+* register services to etcd
+* everything works!
+  - Nginx notices services and generates a new config
+  - it will save ssl certs and use virtual hosts to direct traffic from multiple domains
+* see the [docker-compose.yml](https://github.com/willrstern/nginx-etcd/blob/master/docker-compose.yml) file for a full example of the containers needed along with some sample web containers
 
-## 1) Docker Cloud Setup
-- Create 2 node clusters on Docker Cloud, one with the deploy tag of `apps` and one with the deploy tag of `nginx`.
-<br/><img src="https://farm1.staticflickr.com/628/23806789896_555c9f486b.jpg" style="width: 200px;" />
-<br/><br/>As the names imply, you will give all of your apps, services, databases, etc an `apps` deploy tag, while only `willrstern/docker-cloud-nginx` containers get the `nginx` tag.  This way, nginx will always be on the exact same IP addresses, so DNS can be assigned to those IP addresses.
+## Configure Via ENV Vars
+* `NGINX_NAME` (required) - so services can determine which nginx lb will balance their traffic
+* `NGINX_ETCD_HOST` default `etcd`
+* `NGINX_REFRESH` default 5000 - rate at which it refreshes from etcd
+* `NGINX_DEBUG` enable lots of logging output
+* `SLACK_WEBHOOK` optionally shout on a slack channel when a templated config fails to reload (nginx will keep running with last-good-config).  If for some reason, a service manages create a bad config, service discovery will be frozen until the bad registration is removed from ETCD.
 
-- Send all of your DNS entries & subdomains to the `nginx` node IP addresses.
-(NOTE: [DynDNS (dyn.com)](http://dyn.com) supports active failover for IP addresses in case a node goes down, this is a great solution for DNS)
-
-## 2) Running the Load Balancer
-Run one or more copies of `willrstern/docker-cloud-nginx` on Docker Cloud.
-- add the `nginx` deploy tag & choose the `every node` strategy.<br/>
-- Choose the autorestart `always` option as well.<br/>![](https://farm2.staticflickr.com/1532/25069136655_10f9bc9719_z.jpg)
-- __MAKE SURE__ to choose the `Full Access` API role on the Environment Variables page or the load balancer won't be able to detect running services via the Docker Cloud API.
-- Set `NGINX_LB_NAME=prod` env variable.
-- Set `CONTAINER_LIMIT` env variable if running more than 25 containers.
-- Optionally set `NGINX_NODE_TAGS=tag1,tag2` to restrict to containers running on certain nodes
-<br/>![](https://farm2.staticflickr.com/1716/25042790246_3c514d97d4_z.jpg)
-
-
-The Nginx service will now listen to Docker Cloud's stream API.  As services change, this LB will balance services with the `NGINX_LB=prod` env var. A new Nginx configuration is generated & tested with `nginx -t`.  If Nginx accepts the new configuration, it will reload nginx.
-
-
-## 3) Load Balancing a Service
-Simply run your services on Docker Cloud with the `NGINX_PORT`, `NGINX_VIRTUAL_HOST` and `NGINX_LB` environment variables set in your `Dockerfile`:
+## Expected ETCD structure:
+Services should register in the following format:
+```yaml
+/v2/keys/services:
+  web:
+    tags:
+      nginx: 'primary' #corresponds to NGINX_NAME
+    hosts:
+      test.com:
+        ssl: true #(optional)
+        #(optional) combined .key and .crt file replacing line breaks with \n
+        cert: "-----BEGIN RSA PRIVATE KEY-----\nMIIEogIBAAKCAQEA..."
+        upstream:
+          1b9d3522da76: '123.45.67.8:80'
+          c7c508e915ed: '123.45.67.9:80'
+      test2.com:
+        upstream:
+          1b9d3522da76: '123.45.67.8:80'
+          c7c508e915ed: '123.45.67.9:80'
+  api:
+    tags:
+      nginx: 'primary'
+    hosts:
+      api.com:
+        upstream:
+          1abc3ab1c33: '123.45.67.10:3000'
+          7dacb15ba5b: '123.45.67.11:3000'
 ```
-ENV NGINX_LB prod
-ENV NGINX_VIRTUAL_HOST test.com,othersite.com
-ENV NGINX_PORT 3000
-```
+* You can now point test.com, test2.com & api.com DNS to the nginx instances
+* When the `Host` header is `api.com`, api upstreams will be served, `test.com` will serve `web` upstreams, etc
 
-When your service starts, `willrstern/docker-cloud-nginx` will notice each container and immediately reload it's config!
-
-__NOTE__: Apps don't need to expose ports to be load balanced!  Docker Cloud gives each container an IP, so don't add `EXPOSE` to your Dockerfile.
-
-## 4) SSL Termination
+## SSL Termination
 - create a cert
 - concatenate the `.key` and `.crt` files
-- replace newlines with `\\n` and copy the output
-```
-openssl req -x509 -newkey rsa:2048 -keyout mysite.key -out mysite.crt -days 1080 -nodes -subj '/CN=*/O=My Company Name LTD./C=US'
-cat mysite.key mysite.crt > mysite.combined.crt
-awk 1 ORS='\\\\n' mysite.combined.crt
-```
-- add the combined key & cert into `NGINX_CERTS` env var to your `Dockerfile`
-```
-ENV NGINX_CERTS -----BEGIN RSA PRIVATE KEY-----\\nMIIEogIBAAKCAQEA...and so on
-```
+- replace newlines with `\n` and copy the output
+- add the combined key & cert into services/<servicename>/host/<hostname>/cert in etcd
+- [see here for an example](https://github.com/willrstern/nginx-etcd/blob/master/docker-compose.yml#L45)
 
-If you have multiple `NGINX_VIRTUAL_HOST`s, add a cert for each host with `,` in-between: i.e.
-```
-ENV NGINX_VIRTUAL_HOST mysite.com,othersite.com
-ENV NGINX_CERTS <mysite.com key & cert>,<othersite.com key & cert>
-```
-or
-```
-ENV NGINX_VIRTUAL_HOST mysite.com,othersite.com
-# only do SSL on othersite.com
-ENV NGINX_CERTS ,<othersite.com key & cert>
-```
-
-## 5) Slack Integration
+## Slack Integration
 - Before reloading a config, it runs `nginx -t` to make sure it is valid
 - If a config fails, it will continue using the last-good-config until a working config is generated
 - Add `SLACK_WEBHOOK=https://hooks.slack.com/services/T02RK...` env var to get notifications when a config fails.
-
-## Local Development Workflow
-- Set the `DOCKERCLOUD_AUTH` & `NGINX_LB_NAME` environment variables and run `npm start`:
-```
-$ DOCKERCLOUD_AUTH="Basic ...." NGINX_LB_NAME=prod npm start
-```
-It will now watch your Docker Cloud cluster for events and generate a config to `./default.conf`
-  - __How do I get the `DOCKERCLOUD_AUTH` variable?__
-    - Run any service on Docker Cloud with the `Full Access` API role on the environment variables page.
-    - Now inspect the running service's `Environment Variables` tab to see the `DOCKERCLOUD_AUTH` value.
