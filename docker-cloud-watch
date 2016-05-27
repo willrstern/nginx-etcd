@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -eo pipefail
+
+echo "[nginx] booting container."
+
+# Start the Nginx service using the generated config
+echo "[nginx] starting nginx service..."
+service nginx start
+
+node docker-cloud-watch
+
+# Follow the logs to allow the script to continue running
+tail -f /var/log/nginx/*.log

@@ -1,0 +1,36 @@
+{
+  "name": "tutum-nginx",
+  "version": "1.0.0",
+  "description": "",
+  "main": "tutum-watch.js",
+  "author": "",
+  "license": "ISC",
+  "scripts": {
+    "predeploy": "docker build -t willrstern/docker-cloud-nginx:latest .",
+    "deploy": "docker push willrstern/docker-cloud-nginx:latest",
+    "predeploy:alpha": "docker build -t willrstern/docker-cloud-nginx:alpha .",
+    "deploy:alpha": "docker push willrstern/docker-cloud-nginx:alpha",
+    "mocha": "mocha --compilers js:babel-register",
+    "start": "NGINX_NAME=primary NGINX_ETCD_HOST=localhost NGINX_RELOAD=false NGINX_CERTS='./certs' NGINX_CONFIG_FILE='./default.conf' nodemon docker-cloud-watch.js",
+    "pretest": "docker build -t willrstern/docker-cloud-nginx:test -f Dockerfile.test .",
+    "test": "docker run --rm willrstern/docker-cloud-nginx:test"
+  },
+  "dependencies": {
+    "axios": "^0.7.0",
+    "babel-preset-es2015": "^6.3.13",
+    "babel-register": "^6.3.13",
+    "checksum": "^0.1.1",
+    "etcd-flatten": "0.0.2",
+    "hogan": "^1.0.2",
+    "lodash": "^4.3.0",
+    "node-etcd": "^4.2.1",
+    "object-set": "^1.0.1",
+    "ws": "^0.8.1"
+  },
+  "devDependencies": {
+    "axios": "^0.7.0",
+    "mocha": "^2.4.5",
+    "nginx-config-parser": "^0.1.1",
+    "nodemon": "^1.9.2"
+  }
+}
