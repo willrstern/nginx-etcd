@@ -2,12 +2,15 @@
 
 set -eo pipefail
 
-echo "[nginx] booting container."
-
 # Start the Nginx service using the generated config
 echo "[nginx] starting nginx service..."
 service nginx start
 
+#command to:
+# - watch etcd
+# - on changes, create a new config from a template
+# - test new config with "nginx -t"
+# - if new config passes, run "service nginx reload"
 node docker-cloud-watch
 
 # Follow the logs to allow the script to continue running

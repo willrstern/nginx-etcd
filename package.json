@@ -6,8 +6,8 @@
   "author": "",
   "license": "ISC",
   "scripts": {
-    "predeploy": "docker build -t willrstern/nginx-etcd:latest .",
-    "deploy": "docker push willrstern/nginx-etcd:latest",
+    "predeploy": "docker build -t willrstern/nginx-etcd:0.1 .",
+    "deploy": "docker push willrstern/nginx-etcd:0.1",
     "predeploy:alpha": "docker build -t willrstern/nginx-etcd:alpha .",
     "deploy:alpha": "docker push willrstern/nginx-etcd:alpha",
     "mocha": "mocha --compilers js:babel-register",
